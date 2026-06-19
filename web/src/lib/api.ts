@@ -23,7 +23,7 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     });
   } catch {
     throw new ApiError(
-      `Cannot reach the LeadRadar API at ${API_BASE}. Start the backend with "npm run start:dev" in C:\\Users\\Admin\\leadradar\\backend.`,
+      `Cannot reach the LeadRadar API at ${API_BASE}. Make sure the backend is running.`,
     );
   }
 

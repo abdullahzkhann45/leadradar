@@ -4,7 +4,7 @@ import { HnConnector } from './sources/hn.connector';
 import { GithubConnector } from './sources/github.connector';
 import { IndieHackersConnector } from './sources/indie-hackers.connector';
 import { ProductHuntConnector } from './sources/product-hunt.connector';
-import { RedditConnector } from './sources/reddit.connector';
+import { RedditRssConnector } from './sources/reddit-rss.connector';
 
 async function testSources() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -14,7 +14,7 @@ async function testSources() {
     ['github', app.get(GithubConnector)],
     ['indiehackers', app.get(IndieHackersConnector)],
     ['producthunt', app.get(ProductHuntConnector)],
-    ['reddit', app.get(RedditConnector)],
+    ['reddit', app.get(RedditRssConnector)],
   ] as const;
 
   const results: any[] = [];

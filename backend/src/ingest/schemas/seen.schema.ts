@@ -8,7 +8,7 @@ export class Seen {
   @Prop({ required: true, unique: true })
   sourceExternalKey: string;
 
-  @Prop({ default: () => new Date(), expires: 60 * 60 * 24 * 60 })
+  @Prop({ default: () => new Date(), expires: 60 * 60 * 24 * 60 }) // 60 days TTL
   seenAt: Date;
 }
 

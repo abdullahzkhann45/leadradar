@@ -44,23 +44,27 @@ export class NotifyService {
     const body = `${summary}\n\nIntent: ${intent} | Proof: ${proof}\nSource: ${lead.source}${lead.subreddit ? '/' + lead.subreddit : ''}`;
 
     try {
-      await axios.post(`https://ntfy.sh/${topic}`, body, {
+      const resp = await axios.post(`https://ntfy.sh/${topic}`, body, {
         headers: {
           Title: title,
           Click: lead.url,
           Priority: lead.score >= 70 ? '5' : lead.score >= 50 ? '4' : '3',
           Tags: slName.toLowerCase().replace(/[^a-z]/g, ''),
         },
+        timeout: 10_000,
       });
 
-      await this.notificationModel.create({
-        leadId: lead._id,
-        channel: 'ntfy',
-        sentAt: new Date(),
-        status: 'sent',
-      });
-
-      this.logger.log(`Notified: ${lead.title?.substring(0, 60)}`);
+      if (resp.status >= 200 && resp.status < 300) {
+        await this.notificationModel.create({
+          leadId: lead._id,
+          channel: 'ntfy',
+          sentAt: new Date(),
+          status: 'sent',
+        });
+        this.logger.log(`Notified (score ${lead.score}): ${lead.title?.substring(0, 60)}`);
+      } else {
+        this.logger.error(`ntfy returned ${resp.status}`);
+      }
     } catch (err: any) {
       this.logger.error(`ntfy push failed: ${err.message}`);
     }
