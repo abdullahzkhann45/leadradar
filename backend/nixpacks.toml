@@ -1,3 +1,6 @@
+[phases.setup]
+nodeVersion = "20"
+
 [phases.install]
 cmds = ["npm install"]
 
