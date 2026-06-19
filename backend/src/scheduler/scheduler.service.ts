@@ -76,19 +76,39 @@ export class SchedulerService implements OnModuleInit {
       const fresh = await this.ingest.dedup(raw);
       if (!fresh.length) return;
 
+      let keywordPassed = 0;
+      let llmPassed = 0;
+      let saved = 0;
+      let notified = 0;
+
       for (const post of fresh) {
         try {
           const { pass, matchedServiceLines, matchedIntentTerms } =
             await this.classify.keywordFilter(post);
           if (!pass) continue;
+          keywordPassed++;
+
+          this.logger.log(
+            `[${sourceName}] Keyword hit: "${post.title?.substring(0, 60)}" → SL ${matchedServiceLines.join(',')}${matchedIntentTerms.length ? ' + intent: ' + matchedIntentTerms.join(', ') : ''}`,
+          );
 
           const classification = await this.classify.llmClassify(post);
-          if (!classification || !classification.is_relevant) continue;
+          if (!classification || !classification.is_relevant) {
+            this.logger.log(
+              `[${sourceName}] LLM dropped: "${post.title?.substring(0, 60)}" → ${classification ? 'not relevant' : 'no response'}`,
+            );
+            continue;
+          }
+          llmPassed++;
 
           const score = this.classify.computeScore(
             classification,
             matchedServiceLines,
             matchedIntentTerms,
+          );
+
+          this.logger.log(
+            `[${sourceName}] Scored ${score}: "${post.title?.substring(0, 60)}" → ${classification.one_line_summary}`,
           );
 
           if (score < this.saveThreshold) continue;
@@ -107,15 +127,21 @@ export class SchedulerService implements OnModuleInit {
             score,
             status: 'new',
           });
+          saved++;
 
           if (score >= this.notifyThreshold) {
             await this.notify.notifyLead(lead);
+            notified++;
           }
         } catch (err: any) {
-          if (err.code === 11000) continue; // duplicate key — already processed
+          if (err.code === 11000) continue;
           this.logger.error(`Pipeline error for post ${post.externalId}: ${err.message}`);
         }
       }
+
+      this.logger.log(
+        `[${sourceName}] Pipeline: ${raw.length} raw → ${fresh.length} new → ${keywordPassed} keyword pass → ${llmPassed} LLM pass → ${saved} saved → ${notified} notified`,
+      );
     } catch (err: any) {
       this.logger.error(`${sourceName} pipeline failed: ${err.message}`);
     }

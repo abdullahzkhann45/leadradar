@@ -43,7 +43,7 @@ export class RedditRssConnector implements SourceConnector {
 
       const parsed = this.parser.parse(data);
       const entries = this.getEntries(parsed);
-      this.logger.log(`Read ${entries.length} RSS entries from r/${multireddit}`);
+      this.logger.log(`Read ${entries.length} RSS entries (since ${since.toISOString()})`);
 
       for (const entry of entries) {
         const createdAt = new Date(entry.updated || entry.published || Date.now());
