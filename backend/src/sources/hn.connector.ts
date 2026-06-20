@@ -9,6 +9,8 @@ import { Source, SourceDocument } from './schemas/source.schema';
 export class HnConnector implements SourceConnector {
   readonly name = 'hackernews';
   private readonly logger = new Logger(HnConnector.name);
+  private hiringThreadIds: string[] = [];
+  private hiringThreadsFetchedAt = 0;
 
   constructor(
     @InjectModel(Source.name) private sourceModel: Model<SourceDocument>,
@@ -18,57 +20,14 @@ export class HnConnector implements SourceConnector {
     const source = await this.sourceModel.findOne({ type: 'hackernews' });
     if (!source || !source.enabled) return [];
 
-    const queries: string[] = source.config?.queries || [
-      'freelance',
-      'hire developer',
-      'need developer',
-      'looking for developer',
-      'chrome extension',
-      'AI integration',
-      'build MVP',
-      'fix my app',
-    ];
-
-    const numericTimestamp = source.lastCursor
-      ? parseInt(source.lastCursor, 10)
-      : Math.floor((Date.now() - 24 * 60 * 60_000) / 1000);
-
     const allPosts: RawPost[] = [];
 
-    for (const query of queries) {
-      try {
-        const params = {
-          query,
-          tags: 'story',
-          numericFilters: `created_at_i>${numericTimestamp}`,
-          hitsPerPage: 30,
-        };
-        const { data } = await axios.get(
-          'https://hn.algolia.com/api/v1/search_by_date',
-          { params },
-        );
+    // 1. Broad fetch: latest stories (Ask HN, Show HN, regular stories)
+    await this.fetchLatestStories(allPosts);
 
-        this.logger.debug(
-          `[HN] query="${query}" hits=${data.hits?.length ?? 0} nbHits=${data.nbHits ?? 0} since=${numericTimestamp}`,
-        );
+    // 2. Monthly hiring/freelancer thread comments
+    await this.fetchHiringThreadComments(allPosts);
 
-        for (const hit of data.hits || []) {
-          allPosts.push({
-            source: 'hackernews',
-            externalId: hit.objectID,
-            author: hit.author || '',
-            title: hit.title || '',
-            body: hit.story_text || hit.comment_text || '',
-            url: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
-            createdAt: new Date(hit.created_at),
-          });
-        }
-      } catch (err: any) {
-        this.logger.error(`HN query "${query}" failed: ${err.message}`);
-      }
-    }
-
-    // Dedup by externalId within this batch
     const seen = new Set<string>();
     const unique = allPosts.filter((p) => {
       if (seen.has(p.externalId)) return false;
@@ -78,10 +37,98 @@ export class HnConnector implements SourceConnector {
 
     await this.sourceModel.updateOne(
       { type: 'hackernews' },
-      { lastCursor: String(Math.floor(Date.now() / 1000)), lastPolledAt: new Date() },
+      { lastPolledAt: new Date() },
     );
 
-    this.logger.log(`Polled ${unique.length} posts from HN`);
+    this.logger.log(`Polled ${unique.length} posts from HN (stories + hiring comments)`);
     return unique;
+  }
+
+  private async fetchLatestStories(out: RawPost[]): Promise<void> {
+    try {
+      const { data } = await axios.get(
+        'https://hn.algolia.com/api/v1/search_by_date',
+        { params: { tags: 'story', hitsPerPage: 100 } },
+      );
+
+      this.logger.debug(
+        `[HN] latest stories: ${data.hits?.length ?? 0} fetched, ${data.nbHits ?? 0} total`,
+      );
+
+      for (const hit of data.hits || []) {
+        out.push(this.hitToPost(hit));
+      }
+    } catch (err: any) {
+      this.logger.error(`[HN] latest stories fetch failed: ${err.message}`);
+    }
+  }
+
+  private async fetchHiringThreadComments(out: RawPost[]): Promise<void> {
+    await this.refreshHiringThreadIds();
+    if (!this.hiringThreadIds.length) return;
+
+    for (const storyId of this.hiringThreadIds) {
+      try {
+        const { data } = await axios.get(
+          'https://hn.algolia.com/api/v1/search_by_date',
+          {
+            params: {
+              tags: `comment,story_${storyId}`,
+              hitsPerPage: 50,
+            },
+          },
+        );
+
+        this.logger.debug(
+          `[HN] hiring thread ${storyId}: ${data.hits?.length ?? 0} recent comments`,
+        );
+
+        for (const hit of data.hits || []) {
+          out.push(this.hitToPost(hit));
+        }
+      } catch (err: any) {
+        this.logger.error(`[HN] hiring thread ${storyId} failed: ${err.message}`);
+      }
+    }
+  }
+
+  private async refreshHiringThreadIds(): Promise<void> {
+    // Re-fetch thread IDs once per day
+    if (Date.now() - this.hiringThreadsFetchedAt < 24 * 60 * 60_000) return;
+
+    try {
+      const { data } = await axios.get(
+        'https://hn.algolia.com/api/v1/search_by_date',
+        {
+          params: {
+            tags: 'ask_hn,author_whoishiring',
+            hitsPerPage: 6,
+          },
+        },
+      );
+
+      this.hiringThreadIds = (data.hits || []).map((h: any) => h.objectID);
+      this.hiringThreadsFetchedAt = Date.now();
+
+      this.logger.log(
+        `[HN] Found ${this.hiringThreadIds.length} hiring threads: ${(data.hits || []).map((h: any) => h.title).join(', ')}`,
+      );
+    } catch (err: any) {
+      this.logger.error(`[HN] hiring thread lookup failed: ${err.message}`);
+    }
+  }
+
+  private hitToPost(hit: any): RawPost {
+    return {
+      source: 'hackernews',
+      externalId: hit.objectID,
+      author: hit.author || '',
+      title: hit.title || hit.story_title || '',
+      body: hit.story_text || hit.comment_text || '',
+      url:
+        hit.url ||
+        `https://news.ycombinator.com/item?id=${hit.objectID}`,
+      createdAt: new Date(hit.created_at),
+    };
   }
 }
