@@ -4,7 +4,7 @@ import Sidebar from '@/components/Sidebar';
 
 export const metadata: Metadata = {
   title: 'LeadRadar',
-  description: 'Real-time freelance lead monitor',
+  description: 'Real-time freelance lead monitoring dashboard',
 };
 
 export default function RootLayout({
