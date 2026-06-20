@@ -61,7 +61,7 @@ export class ClassifyService {
       .map((kw) => kw.term);
 
     return {
-      pass: matchedServiceLines.size > 0,
+      pass: matchedServiceLines.size > 0 || matchedIntentTerms.length > 0,
       matchedServiceLines: [...matchedServiceLines],
       matchedIntentTerms,
     };
@@ -220,7 +220,7 @@ IMPORTANT: service_line MUST be an integer 0-5. Use 0 only when the post does no
 
   private canCallGemini(): boolean {
     this.resetGeminiCounterIfNeeded();
-    const limit = parseInt(this.config.get<string>('GEMINI_DAILY_LIMIT', '100'), 10);
+    const limit = parseInt(this.config.get<string>('GEMINI_DAILY_LIMIT', '500'), 10);
 
     if (limit <= 0) {
       this.logger.warn('Gemini classification disabled by GEMINI_DAILY_LIMIT');
@@ -238,7 +238,7 @@ IMPORTANT: service_line MUST be an integer 0-5. Use 0 only when the post does no
   private recordGeminiCall() {
     this.resetGeminiCounterIfNeeded();
     this.geminiCallsToday += 1;
-    const limit = parseInt(this.config.get<string>('GEMINI_DAILY_LIMIT', '100'), 10);
+    const limit = parseInt(this.config.get<string>('GEMINI_DAILY_LIMIT', '500'), 10);
     this.logger.log(`Gemini classify call ${this.geminiCallsToday}/${limit} today`);
   }
 
