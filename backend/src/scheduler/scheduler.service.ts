@@ -99,6 +99,12 @@ export class SchedulerService implements OnModuleInit {
             );
             continue;
           }
+          if (classification.service_line === 0) {
+            this.logger.log(
+              `[${sourceName}] LLM skip (no service line match): "${post.title?.substring(0, 60)}"`,
+            );
+            continue;
+          }
           llmPassed++;
 
           const score = this.classify.computeScore(

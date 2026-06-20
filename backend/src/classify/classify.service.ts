@@ -125,7 +125,7 @@ Subreddit: ${post.subreddit || 'N/A'}
 Respond ONLY with valid JSON (no markdown, no code fences):
 {
   "is_relevant": boolean,
-  "service_line": number (1-5, which service line matches best),
+  "service_line": integer (1=AI/LLM, 2=Chrome ext, 3=Vibe-coded fix, 4=MVP build, 5=React/Node fix, 0=none of the above),
   "is_nontechnical_founder": boolean,
   "intent_to_pay": "explicit" | "implied" | "none",
   "budget_signal": boolean,
@@ -133,7 +133,8 @@ Respond ONLY with valid JSON (no markdown, no code fences):
   "one_line_summary": "string (max 100 chars)",
   "suggested_proof": "QuickGo" | "EcoLife" | "TruthLens" | "relevant past project",
   "confidence": number (0.0 to 1.0)
-}`;
+}
+IMPORTANT: service_line MUST be an integer 0-5. Use 0 only when the post does not match any service line.`;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -154,7 +155,7 @@ Respond ONLY with valid JSON (no markdown, no code fences):
     return null;
   }
 
-  private parseClassificationResponse(text: string): Classification {
+  private parseClassificationResponse(text: string): Classification | null {
     const stripped = text
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
@@ -167,8 +168,19 @@ Respond ONLY with valid JSON (no markdown, no code fences):
     }
 
     const parsed = JSON.parse(stripped.slice(jsonStart, jsonEnd + 1));
+    this.normalizeClassification(parsed);
     this.assertValidClassification(parsed);
     return parsed;
+  }
+
+  private normalizeClassification(value: any): void {
+    if (value.service_line !== undefined) {
+      const sl = Number(value.service_line);
+      value.service_line = Number.isFinite(sl) ? sl : 0;
+    }
+    if (value.confidence !== undefined) {
+      value.confidence = Number(value.confidence);
+    }
   }
 
   private assertValidClassification(value: any): asserts value is Classification {
@@ -176,10 +188,12 @@ Respond ONLY with valid JSON (no markdown, no code fences):
     const validUrgency = ['high', 'medium', 'low'];
 
     if (typeof value?.is_relevant !== 'boolean') {
+      this.logger.error(`Gemini validation fail: raw JSON: ${JSON.stringify(value)}`);
       throw new Error('Gemini JSON missing boolean is_relevant');
     }
-    if (![1, 2, 3, 4, 5].includes(value.service_line)) {
-      throw new Error('Gemini JSON has invalid service_line');
+    if (![0, 1, 2, 3, 4, 5].includes(value.service_line)) {
+      this.logger.error(`Gemini validation fail: service_line=${JSON.stringify(value.service_line)}, raw JSON: ${JSON.stringify(value)}`);
+      throw new Error(`Gemini JSON has invalid service_line: ${value.service_line}`);
     }
     if (typeof value.is_nontechnical_founder !== 'boolean') {
       throw new Error('Gemini JSON missing boolean is_nontechnical_founder');
