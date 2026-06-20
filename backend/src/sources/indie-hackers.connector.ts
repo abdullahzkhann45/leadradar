@@ -27,9 +27,6 @@ export class IndieHackersConnector implements SourceConnector {
     const feeds: string[] = source.config?.feeds || [];
     if (!feeds.length) return [];
 
-    const since = source.lastCursor
-      ? new Date(source.lastCursor)
-      : new Date(Date.now() - 60 * 60_000);
     const posts: RawPost[] = [];
 
     for (const feedUrl of feeds) {
@@ -46,8 +43,6 @@ export class IndieHackersConnector implements SourceConnector {
 
           for (const item of items) {
             const createdAt = new Date(item.pubDate || item.updated || item.published || Date.now());
-            if (createdAt <= since) continue;
-
             posts.push({
               source: 'indiehackers',
               externalId: this.getStableId(item),
@@ -60,8 +55,8 @@ export class IndieHackersConnector implements SourceConnector {
             });
           }
         } else {
-          const htmlPosts = this.extractHtmlPosts(data, since, feedUrl);
-          this.logger.log(`Read ${htmlPosts.length} recent public HTML posts from ${feedUrl}`);
+          const htmlPosts = this.extractHtmlPosts(data, feedUrl);
+          this.logger.log(`Read ${htmlPosts.length} HTML posts from ${feedUrl}`);
           posts.push(...htmlPosts);
         }
       } catch (err: any) {
@@ -92,11 +87,11 @@ export class IndieHackersConnector implements SourceConnector {
     return trimmed.startsWith('<?xml') || trimmed.includes('<rss') || trimmed.includes('<feed');
   }
 
-  private extractHtmlPosts(html: string, since: Date, pageUrl: string): RawPost[] {
+  private extractHtmlPosts(html: string, pageUrl: string): RawPost[] {
     const posts: RawPost[] = [];
     let matchedCards = 0;
     const linkRegex =
-      /<a\s+[^>]*href="(\/post\/[^"]+)"[^>]*class="[^"]*story__text-link[^"]*"[^>]*>[\s\S]*?<h3[^>]*class="[^"]*story__title[^"]*"[^>]*>([\s\S]*?)<\/h3>/gi;
+      /<a\s+[^>]*href="(\/(?:post|product)\/[^"]+)"[^>]*class="[^"]*story__text-link[^"]*"[^>]*>[\s\S]*?<h3[^>]*class="[^"]*story__title[^"]*"[^>]*>([\s\S]*?)<\/h3>/gi;
     let match: RegExpExecArray | null;
 
     while ((match = linkRegex.exec(html))) {
@@ -107,13 +102,18 @@ export class IndieHackersConnector implements SourceConnector {
       const ageMatch = ageWindow.match(
         /story__time-ago[\s\S]*?<span>\s*([^<]+?)\s*<\/span>/i,
       );
-      const createdAt = ageMatch ? this.parseAge(ageMatch[1]) : null;
+      const createdAt = ageMatch ? this.parseAge(ageMatch[1]) : new Date();
 
-      if (!createdAt || createdAt <= since) continue;
+      if (matchedCards <= 2) {
+        this.logger.debug(
+          `[IH] Card #${matchedCards}: age="${ageMatch?.[1] ?? 'none'}" title="${title.substring(0, 60)}"`,
+        );
+      }
 
+      const slug = href.replace(/^\/(post|product)\//, '');
       posts.push({
         source: 'indiehackers',
-        externalId: href.replace('/post/', ''),
+        externalId: slug,
         author: '',
         title,
         body: title,
@@ -123,13 +123,14 @@ export class IndieHackersConnector implements SourceConnector {
       });
     }
 
-    this.logger.log(`Found ${matchedCards} public HTML post cards on ${pageUrl}`);
+    this.logger.log(`Found ${matchedCards} HTML post cards on ${pageUrl}`);
     return posts;
   }
 
-  private parseAge(age: string): Date | null {
-    const match = age.trim().toLowerCase().match(/^(\d+)\s*([mhd])$/);
-    if (!match) return null;
+  private parseAge(age: string): Date {
+    const raw = age.trim().toLowerCase();
+    const match = raw.match(/^(\d+)\s*([mhd])/);
+    if (!match) return new Date();
 
     const amount = Number(match[1]);
     const unit = match[2];

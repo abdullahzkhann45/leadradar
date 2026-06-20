@@ -102,14 +102,14 @@ async function seed() {
     enabled: true,
     config: {
       queries: [
-        'need a developer',
+        'freelance',
+        'hire developer',
+        'need developer',
         'looking for developer',
-        'hire freelancer',
-        'build my app',
         'chrome extension',
         'AI integration',
+        'build MVP',
         'fix my app',
-        'looking for coder',
       ],
     },
     pollIntervalSec: 60,

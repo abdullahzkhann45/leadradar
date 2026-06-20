@@ -19,37 +19,40 @@ export class HnConnector implements SourceConnector {
     if (!source || !source.enabled) return [];
 
     const queries: string[] = source.config?.queries || [
-      'need a developer',
+      'freelance',
+      'hire developer',
+      'need developer',
       'looking for developer',
-      'hire freelancer',
-      'build my app',
-      'need help building',
       'chrome extension',
       'AI integration',
+      'build MVP',
       'fix my app',
     ];
 
     const numericTimestamp = source.lastCursor
       ? parseInt(source.lastCursor, 10)
-      : Math.floor((Date.now() - 60 * 60_000) / 1000);
+      : Math.floor((Date.now() - 24 * 60 * 60_000) / 1000);
 
     const allPosts: RawPost[] = [];
 
     for (const query of queries) {
       try {
+        const params = {
+          query,
+          tags: 'story',
+          numericFilters: `created_at_i>${numericTimestamp}`,
+          hitsPerPage: 30,
+        };
         const { data } = await axios.get(
           'https://hn.algolia.com/api/v1/search_by_date',
-          {
-            params: {
-              query,
-              tags: '(story,ask_hn,show_hn)',
-              numericFilters: `created_at_i>${numericTimestamp}`,
-              hitsPerPage: 20,
-            },
-          },
+          { params },
         );
 
-        for (const hit of data.hits) {
+        this.logger.debug(
+          `[HN] query="${query}" hits=${data.hits?.length ?? 0} nbHits=${data.nbHits ?? 0} since=${numericTimestamp}`,
+        );
+
+        for (const hit of data.hits || []) {
           allPosts.push({
             source: 'hackernews',
             externalId: hit.objectID,
