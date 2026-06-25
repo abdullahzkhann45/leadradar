@@ -15,8 +15,8 @@ async function seed() {
 
   // Service line 1: AI / LLM integration (top priority)
   const sl1Keywords = [
-    'add ai', 'chatbot', 'ai feature', 'openai', 'gpt', 'chatgpt',
-    'claude api', 'gemini', 'rag', 'llm', 'ai integration', 'embed ai',
+    'add ai', 'chatbot', 'ai feature', 'openai', 'chatgpt',
+    'claude api', 'ai integration', 'embed ai',
     'ai assistant', 'ai app', 'langchain', 'vector database',
   ];
 
@@ -28,9 +28,9 @@ async function seed() {
 
   // Service line 3: Fix / finish vibe-coded app
   const sl3Keywords = [
-    'lovable', 'bolt.new', 'v0', 'cursor', 'replit', 'supabase error',
+    'lovable', 'bolt.new', 'replit', 'supabase error',
     'vibe coded', 'vibe-coded', 'ai built app', 'no-code app broken',
-    'ai generated app', 'bolt app', 'v0 app',
+    'ai generated app', 'bolt app',
   ];
 
   // Service line 4: Full-stack MVP build / finish

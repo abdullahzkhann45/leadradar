@@ -31,18 +31,30 @@ export class ClassifyService {
     }
   }
 
+  private static escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private static wordMatch(text: string, term: string): boolean {
+    const pattern = new RegExp(
+      `\\b${ClassifyService.escapeRegex(term)}\\b`,
+      'i',
+    );
+    return pattern.test(text);
+  }
+
   async keywordFilter(post: RawPost): Promise<{
     pass: boolean;
     matchedServiceLines: number[];
     matchedIntentTerms: string[];
   }> {
-    const text = `${post.title} ${post.body}`.toLowerCase();
+    const text = `${post.title} ${post.body}`;
 
     const keywords = await this.keywordModel.find({ enabled: true }).lean();
 
     const blacklist = keywords.filter((k) => k.type === 'blacklist');
     for (const bl of blacklist) {
-      if (text.includes(bl.term.toLowerCase())) {
+      if (ClassifyService.wordMatch(text, bl.term)) {
         return { pass: false, matchedServiceLines: [], matchedIntentTerms: [] };
       }
     }
@@ -50,18 +62,18 @@ export class ClassifyService {
     const coreKeywords = keywords.filter((k) => k.type === 'core');
     const matchedServiceLines = new Set<number>();
     for (const kw of coreKeywords) {
-      if (text.includes(kw.term.toLowerCase())) {
+      if (ClassifyService.wordMatch(text, kw.term)) {
         matchedServiceLines.add(kw.serviceLine);
       }
     }
 
     const matchedIntentTerms = keywords
       .filter((k) => k.type === 'intent')
-      .filter((kw) => text.includes(kw.term.toLowerCase()))
+      .filter((kw) => ClassifyService.wordMatch(text, kw.term))
       .map((kw) => kw.term);
 
     return {
-      pass: matchedServiceLines.size > 0 || matchedIntentTerms.length > 0,
+      pass: matchedServiceLines.size > 0,
       matchedServiceLines: [...matchedServiceLines],
       matchedIntentTerms,
     };
@@ -143,7 +155,19 @@ IMPORTANT: service_line MUST be an integer 0-5. Use 0 only when the post does no
         const text = result.response.text().trim();
         return this.parseClassificationResponse(text);
       } catch (err: any) {
-        const message = `LLM classification attempt ${attempt} failed for ${post.source}:${post.externalId}: ${err.message}`;
+        const msg = err.message || '';
+        const isRateLimit =
+          err.status === 429 ||
+          /429|rate.?limit|quota|resource.?exhausted|billing/i.test(msg);
+
+        if (isRateLimit) {
+          this.logger.warn(
+            `[LLM] 429/quota for ${post.source}:${post.externalId}: ${msg} — skipping (no retry)`,
+          );
+          return null;
+        }
+
+        const message = `LLM classification attempt ${attempt} failed for ${post.source}:${post.externalId}: ${msg}`;
         if (attempt === 2) {
           this.logger.error(message);
           return null;
