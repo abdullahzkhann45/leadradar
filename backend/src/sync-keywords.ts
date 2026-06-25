@@ -42,13 +42,39 @@ async function syncKeywords() {
   });
   console.log(`Removed ${r3.deletedCount} noisy vibe-coded core keywords (cursor, v0)`);
 
-  // Also remove the orphaned 'v0 app' compound term since 'v0' is gone
   const r4 = await keywordModel.deleteMany({
     serviceLine: 3,
     type: 'core',
     term: 'v0 app',
   });
   if (r4.deletedCount) console.log(`Removed 'v0 app' keyword`);
+
+  // Remove 'lovable' from SL3 core (common English adjective)
+  const r5 = await keywordModel.deleteMany({
+    serviceLine: 3,
+    type: 'core',
+    term: 'lovable',
+  });
+  console.log(`Removed ${r5.deletedCount} 'lovable' core keyword`);
+
+  // Remove broken 'compensat' intent term
+  const r6 = await keywordModel.deleteMany({
+    type: 'intent',
+    term: 'compensat',
+  });
+  console.log(`Removed ${r6.deletedCount} broken 'compensat' intent term`);
+
+  // Insert 'compensation' and 'compensate' as intent terms (idempotent)
+  const newIntentTerms = ['compensation', 'compensate'];
+  let inserted = 0;
+  for (const term of newIntentTerms) {
+    const exists = await keywordModel.findOne({ term, type: 'intent' });
+    if (!exists) {
+      await keywordModel.create({ serviceLine: 0, term, type: 'intent', enabled: true });
+      inserted++;
+    }
+  }
+  console.log(`Inserted ${inserted} new intent terms (${newIntentTerms.join(', ')})`);
 
   await app.close();
 }

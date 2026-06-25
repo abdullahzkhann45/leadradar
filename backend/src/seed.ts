@@ -28,7 +28,7 @@ async function seed() {
 
   // Service line 3: Fix / finish vibe-coded app
   const sl3Keywords = [
-    'lovable', 'bolt.new', 'replit', 'supabase error',
+    'bolt.new', 'replit', 'supabase error',
     'vibe coded', 'vibe-coded', 'ai built app', 'no-code app broken',
     'ai generated app', 'bolt app',
   ];
@@ -50,8 +50,8 @@ async function seed() {
   // Intent/budget boost terms
   const intentTerms = [
     'willing to pay', 'budget', 'hire', 'paid', 'rate', 'quote',
-    'freelancer', 'contract', 'deadline', 'asap', 'paying', 'compensat',
-    'hourly', 'fixed price', 'project rate',
+    'freelancer', 'contract', 'deadline', 'asap', 'paying', 'compensation',
+    'compensate', 'hourly', 'fixed price', 'project rate',
   ];
 
   // Blacklist terms
